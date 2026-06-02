@@ -65,13 +65,18 @@ async def google_chat_pendencias_acoes(request: Request):
     print("EVENTO RECEBIDO GOOGLE CHAT")
     print(event)
 
-    texto = (
-        event.get("messagePayload", {})
-        .get("message", {})
-        .get("text")
-        or event.get("message", {}).get("text")
-        or ""
-    ).strip()
+    msg_payload = event.get("messagePayload", {}).get("message", {})
+msg_normal = event.get("message", {})
+
+texto = (
+    msg_payload.get("argumentText")
+    or msg_payload.get("formattedText")
+    or msg_payload.get("text")
+    or msg_normal.get("argumentText")
+    or msg_normal.get("formattedText")
+    or msg_normal.get("text")
+    or ""
+).strip()
 
     print("===================================")
     print("TEXTO EXTRAIDO:")
