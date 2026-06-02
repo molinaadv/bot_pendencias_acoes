@@ -34,17 +34,21 @@ def resposta_chat(texto):
 
 
 def extrair_texto(event):
-    texto = (
-        event.get("argumentText")
-        or event.get("message", {}).get("argumentText")
-        or event.get("message", {}).get("text")
-        or event.get("messagePayload", {}).get("argumentText")
-        or event.get("messagePayload", {}).get("message", {}).get("argumentText")
-        or event.get("messagePayload", {}).get("message", {}).get("text")
-        or ""
-    )
+    caminhos = [
+        event.get("argumentText"),
+        event.get("message", {}).get("argumentText"),
+        event.get("message", {}).get("text"),
+        event.get("messagePayload", {}).get("argumentText"),
+        event.get("messagePayload", {}).get("message", {}).get("argumentText"),
+        event.get("messagePayload", {}).get("message", {}).get("text"),
+        event.get("messagePayload", {}).get("message", {}).get("formattedText"),
+    ]
 
-    return str(texto).strip()
+    for item in caminhos:
+        if item:
+            return str(item).strip()
+
+    return ""
 
 
 def dados_usuario(event):
