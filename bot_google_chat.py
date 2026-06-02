@@ -122,35 +122,6 @@ def enviar_mensagem_google_chat(space_name, texto):
         print("ERRO AO ENVIAR MENSAGEM GOOGLE CHAT:")
         print(e)
         return False
-    """
-    Envio ativo para Google Chat.
-    Para funcionar, precisa configurar depois a autenticação da Google Chat API.
-    Por enquanto, se não houver token, apenas registra no log e não quebra.
-    """
-    token = os.getenv("GOOGLE_CHAT_BEARER_TOKEN", "")
-
-    if not token:
-        print("GOOGLE_CHAT_BEARER_TOKEN não configurado. Mensagem não enviada automaticamente.")
-        print(texto)
-        return False
-
-    url = f"https://chat.googleapis.com/v1/{space_name}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {"text": texto}
-
-    resp = requests.post(url, headers=headers, json=payload, timeout=15)
-
-    print("RESPOSTA GOOGLE CHAT:")
-    print(resp.status_code)
-    print(resp.text)
-
-    return resp.status_code in [200, 201]
-
 
 @app.get("/")
 async def home():
