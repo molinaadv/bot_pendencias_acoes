@@ -60,7 +60,19 @@ async def home():
 
 @app.post("/google-chat-pendencias-acoes")
 async def google_chat_pendencias_acoes(request: Request):
+    
     event = await request.json()
+
+    print("ARGUMENT TEXT:")
+    print(event.get("argumentText"))
+
+    print("MESSAGE:")
+    print(event.get("message"))
+
+    texto = str(event.get("argumentText", "")).strip()
+
+    print("TEXTO FINAL:")
+    print(texto)
 
     print("===================================")
     print("EVENTO RECEBIDO GOOGLE CHAT")
@@ -72,11 +84,6 @@ async def google_chat_pendencias_acoes(request: Request):
         or event.get("message", {}).get("text")
         or ""
     ).strip()
-
-    print("===================================")
-    print("TEXTO EXTRAIDO:")
-    print(f"'{texto}'")
-    print("===================================")
 
     texto_lower = texto.lower()
 
