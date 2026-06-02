@@ -33,8 +33,27 @@ def resposta_chat(texto):
     }
 
 
+def extrair_texto(event):
+    texto = (
+        event.get("argumentText")
+        or event.get("message", {}).get("argumentText")
+        or event.get("message", {}).get("text")
+        or event.get("messagePayload", {}).get("message", {}).get("argumentText")
+        or event.get("messagePayload", {}).get("message", {}).get("text")
+        or ""
+    )
+
+    return str(texto).strip()
+
+
 def dados_usuario(event):
-    user = event.get("chat", {}).get("user", {}) or event.get("user", {}) or {}
+    user = (
+        event.get("user")
+        or event.get("chat", {}).get("user")
+        or event.get("message", {}).get("sender")
+        or event.get("messagePayload", {}).get("message", {}).get("sender")
+        or {}
+    )
 
     nome = (
         user.get("displayName")
@@ -55,51 +74,58 @@ def dados_usuario(event):
 
 @app.get("/")
 async def home():
-    return {"status": "online", "app": "Pendências Ações"}
+    return {
+        "status": "online",
+        "app": "Pendências Ações"
+    }
 
 
 @app.post("/google-chat-pendencias-acoes")
 async def google_chat_pendencias_acoes(request: Request):
-    
     event = await request.json()
-
-    print("ARGUMENT TEXT:")
-    print(event.get("argumentText"))
-
-    print("MESSAGE:")
-    print(event.get("message"))
-
-    texto = str(event.get("argumentText", "")).strip()
-
-    print("TEXTO FINAL:")
-    print(texto)
 
     print("===================================")
     print("EVENTO RECEBIDO GOOGLE CHAT")
     print(event)
 
-    texto = (
-        event.get("argumentText")
-        or event.get("message", {}).get("argumentText")
-        or event.get("message", {}).get("text")
-        or ""
-    ).strip()
-
+    texto = extrair_texto(event)
     texto_lower = texto.lower()
+
+    print("===================================")
+    print("TEXTO EXTRAIDO:")
+    print(f"'{texto}'")
+    print("TEXTO LOWER:")
+    print(f"'{texto_lower}'")
+    print("===================================")
 
     nome_usuario, email_usuario, google_user_id = dados_usuario(event)
 
-    session_resp = (
-        supabase
-        .table(TABELA_SESSOES)
-        .select("*")
-        .eq("user_id", google_user_id)
-        .execute()
-    )
+    print("USUARIO IDENTIFICADO:")
+    print(nome_usuario)
+    print(email_usuario)
+    print(google_user_id)
 
-    sessao = session_resp.data[0] if session_resp.data else None
+    try:
+        session_resp = (
+            supabase
+            .table(TABELA_SESSOES)
+            .select("*")
+            .eq("user_id", google_user_id)
+            .execute()
+        )
 
-    if texto_lower in ["oi", "olá", "ola", "menu", "ajuda", "início", "inicio"]:
+        sessao = session_resp.data[0] if session_resp.data else None
+
+    except Exception as e:
+        print("ERRO AO CONSULTAR SESSAO:")
+        print(e)
+
+        return resposta_chat(
+            "⚠️ Não consegui consultar a sessão no banco de dados.\n\n"
+            "Verifique a tabela *chat_sessions_acoes* no Supabase."
+        )
+
+    if texto_lower in ["oi", "olá", "ola", "menu", "ajuda", "início", "inicio", "help"]:
         return resposta_chat(
             "📌 *Pendências Ações*\n\n"
             "Comandos disponíveis:\n\n"
@@ -118,18 +144,30 @@ async def google_chat_pendencias_acoes(request: Request):
         "pendência",
         "pendencia"
     ]:
-        if sessao:
-            supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+        print("ENTROU NO BLOCO NOVA")
 
-        supabase.table(TABELA_SESSOES).insert({
-            "user_id": google_user_id,
-            "etapa": "cidade",
-            "dados": {
-                "solicitante": nome_usuario,
-                "email_solicitante": email_usuario,
-                "google_user_id": google_user_id
-            }
-        }).execute()
+        try:
+            if sessao:
+                supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+
+            supabase.table(TABELA_SESSOES).insert({
+                "user_id": google_user_id,
+                "etapa": "cidade",
+                "dados": {
+                    "solicitante": nome_usuario,
+                    "email_solicitante": email_usuario,
+                    "google_user_id": google_user_id
+                }
+            }).execute()
+
+        except Exception as e:
+            print("ERRO AO CRIAR SESSAO:")
+            print(e)
+
+            return resposta_chat(
+                "⚠️ Não consegui iniciar a abertura da pendência.\n\n"
+                "Verifique se a tabela *chat_sessions_acoes* existe e se as colunas estão corretas."
+            )
 
         return resposta_chat(
             f"📋 *Nova Pendência - Ações*\n\n"
@@ -139,8 +177,13 @@ async def google_chat_pendencias_acoes(request: Request):
         )
 
     if texto_lower in ["cancelar", "sair", "parar"]:
-        if sessao:
-            supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+        try:
+            if sessao:
+                supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+
+        except Exception as e:
+            print("ERRO AO CANCELAR SESSAO:")
+            print(e)
 
         return resposta_chat(
             "Operação cancelada.\n\n"
@@ -148,17 +191,27 @@ async def google_chat_pendencias_acoes(request: Request):
         )
 
     if texto_lower in ["listar", "pendências", "pendencias", "abertas"]:
-        pend_resp = (
-            supabase
-            .table(TABELA_PENDENCIAS)
-            .select("protocolo,cidade,comunidade,status,descricao,criado_em")
-            .in_("status", ["Aberta", "Em andamento", "Aguardando informação"])
-            .order("criado_em", desc=True)
-            .limit(10)
-            .execute()
-        )
+        try:
+            pend_resp = (
+                supabase
+                .table(TABELA_PENDENCIAS)
+                .select("protocolo,cidade,comunidade,status,descricao,criado_em")
+                .in_("status", ["Aberta", "Em andamento", "Aguardando informação"])
+                .order("criado_em", desc=True)
+                .limit(10)
+                .execute()
+            )
 
-        dados = pend_resp.data or []
+            dados = pend_resp.data or []
+
+        except Exception as e:
+            print("ERRO AO LISTAR PENDENCIAS:")
+            print(e)
+
+            return resposta_chat(
+                "⚠️ Não consegui listar as pendências.\n\n"
+                "Verifique a tabela *pendencias_acoes* no Supabase."
+            )
 
         if not dados:
             return resposta_chat("Nenhuma pendência ativa encontrada.")
@@ -171,7 +224,7 @@ async def google_chat_pendencias_acoes(request: Request):
                 f"Cidade: {item.get('cidade', '')}\n"
                 f"Comunidade: {item.get('comunidade', '')}\n"
                 f"Status: {item.get('status', '')}\n"
-                f"Descrição: {item.get('descricao', '')[:80]}"
+                f"Descrição: {str(item.get('descricao', ''))[:80]}"
             )
 
         return resposta_chat("\n".join(linhas))
@@ -188,20 +241,34 @@ async def google_chat_pendencias_acoes(request: Request):
     if etapa == "cidade":
         dados["cidade"] = texto
 
-        supabase.table(TABELA_SESSOES).update({
-            "etapa": "comunidade",
-            "dados": dados
-        }).eq("user_id", google_user_id).execute()
+        try:
+            supabase.table(TABELA_SESSOES).update({
+                "etapa": "comunidade",
+                "dados": dados
+            }).eq("user_id", google_user_id).execute()
+
+        except Exception as e:
+            print("ERRO AO SALVAR CIDADE:")
+            print(e)
+
+            return resposta_chat("⚠️ Erro ao salvar a cidade. Tente novamente.")
 
         return resposta_chat("Informe a *comunidade*:")
 
     if etapa == "comunidade":
         dados["comunidade"] = texto
 
-        supabase.table(TABELA_SESSOES).update({
-            "etapa": "descricao",
-            "dados": dados
-        }).eq("user_id", google_user_id).execute()
+        try:
+            supabase.table(TABELA_SESSOES).update({
+                "etapa": "descricao",
+                "dados": dados
+            }).eq("user_id", google_user_id).execute()
+
+        except Exception as e:
+            print("ERRO AO SALVAR COMUNIDADE:")
+            print(e)
+
+            return resposta_chat("⚠️ Erro ao salvar a comunidade. Tente novamente.")
 
         return resposta_chat("Descreva a *pendência*:")
 
@@ -221,23 +288,34 @@ async def google_chat_pendencias_acoes(request: Request):
             "responsavel": "Ações"
         }
 
-        insert_resp = supabase.table(TABELA_PENDENCIAS).insert(pendencia).execute()
+        try:
+            insert_resp = supabase.table(TABELA_PENDENCIAS).insert(pendencia).execute()
 
-        pendencia_id = None
-        if insert_resp.data:
-            pendencia_id = insert_resp.data[0].get("id")
+            pendencia_id = None
 
-        supabase.table(TABELA_HISTORICO).insert({
-            "pendencia_id": pendencia_id,
-            "protocolo": protocolo,
-            "usuario": nome_usuario,
-            "email_usuario": email_usuario,
-            "status_anterior": "",
-            "status_novo": "Aberta",
-            "observacao": "Pendência criada pelo Google Chat"
-        }).execute()
+            if insert_resp.data:
+                pendencia_id = insert_resp.data[0].get("id")
 
-        supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+            supabase.table(TABELA_HISTORICO).insert({
+                "pendencia_id": pendencia_id,
+                "protocolo": protocolo,
+                "usuario": nome_usuario,
+                "email_usuario": email_usuario,
+                "status_anterior": "",
+                "status_novo": "Aberta",
+                "observacao": "Pendência criada pelo Google Chat"
+            }).execute()
+
+            supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+
+        except Exception as e:
+            print("ERRO AO CRIAR PENDENCIA:")
+            print(e)
+
+            return resposta_chat(
+                "⚠️ Erro ao criar a pendência no banco de dados.\n\n"
+                "Verifique a tabela *pendencias_acoes*."
+            )
 
         return resposta_chat(
             f"✅ *Pendência criada com sucesso!*\n\n"
@@ -248,4 +326,7 @@ async def google_chat_pendencias_acoes(request: Request):
             f"A pendência já aparece no painel."
         )
 
-    return resposta_chat("Não entendi. Digite *nova* para abrir uma pendência.")
+    return resposta_chat(
+        "Não entendi.\n\n"
+        "Digite *nova* para abrir uma pendência."
+    )
