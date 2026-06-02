@@ -73,6 +73,11 @@ async def google_chat_pendencias_acoes(request: Request):
         or ""
     ).strip()
 
+    print("===================================")
+    print("TEXTO EXTRAIDO:")
+    print(f"'{texto}'")
+    print("===================================")
+
     texto_lower = texto.lower()
 
     nome_usuario, email_usuario, google_user_id = dados_usuario(event)
