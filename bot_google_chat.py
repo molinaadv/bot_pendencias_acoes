@@ -38,6 +38,7 @@ def extrair_texto(event):
         event.get("argumentText")
         or event.get("message", {}).get("argumentText")
         or event.get("message", {}).get("text")
+        or event.get("messagePayload", {}).get("argumentText")
         or event.get("messagePayload", {}).get("message", {}).get("argumentText")
         or event.get("messagePayload", {}).get("message", {}).get("text")
         or ""
