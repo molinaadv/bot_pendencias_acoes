@@ -34,19 +34,23 @@ def resposta_chat(texto):
 
 
 def extrair_texto(event):
-    caminhos = [
-        event.get("argumentText"),
-        event.get("message", {}).get("argumentText"),
-        event.get("message", {}).get("text"),
-        event.get("messagePayload", {}).get("argumentText"),
-        event.get("messagePayload", {}).get("message", {}).get("argumentText"),
-        event.get("messagePayload", {}).get("message", {}).get("text"),
-        event.get("messagePayload", {}).get("message", {}).get("formattedText"),
-    ]
+    print("EVENTO COMPLETO:")
+    print(event)
 
-    for item in caminhos:
-        if item:
-            return str(item).strip()
+    try:
+        return str(event["message"]["text"]).strip()
+    except:
+        pass
+
+    try:
+        return str(event["messagePayload"]["message"]["text"]).strip()
+    except:
+        pass
+
+    try:
+        return str(event["argumentText"]).strip()
+    except:
+        pass
 
     return ""
 
