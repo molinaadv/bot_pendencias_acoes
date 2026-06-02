@@ -50,12 +50,17 @@ async def home():
 
 @app.post("/google-chat-pendencias-acoes")
 async def google_chat_pendencias_acoes(request: Request):
+
     event = await request.json()
 
-    texto = (event.get("message", {}).get("text") or "").strip()
-    texto_lower = texto.lower()
+    print("===================================")
+    print("EVENTO RECEBIDO GOOGLE CHAT")
+    print(event)
+    print("===================================")
 
-    nome_usuario, email_usuario, google_user_id = dados_usuario(event)
+    return {
+        "text": "✅ Bot Pendências Ações conectado com sucesso.\n\nDigite 'nova' para iniciar uma pendência."
+    }
 
     if not texto:
         return resposta(
