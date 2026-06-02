@@ -80,6 +80,48 @@ def dados_chat(event):
 
 
 def enviar_mensagem_google_chat(space_name, texto):
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request as GoogleRequest
+
+    service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+
+    if not service_account_json:
+        print("GOOGLE_SERVICE_ACCOUNT_JSON não configurado.")
+        print(texto)
+        return False
+
+    try:
+        info = json.loads(service_account_json)
+
+        credentials = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/chat.bot"]
+        )
+
+        credentials.refresh(GoogleRequest())
+        token = credentials.token
+
+        url = f"https://chat.googleapis.com/v1/{space_name}/messages"
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {"text": texto}
+
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+
+        print("RESPOSTA GOOGLE CHAT:")
+        print(resp.status_code)
+        print(resp.text)
+
+        return resp.status_code in [200, 201]
+
+    except Exception as e:
+        print("ERRO AO ENVIAR MENSAGEM GOOGLE CHAT:")
+        print(e)
+        return False
     """
     Envio ativo para Google Chat.
     Para funcionar, precisa configurar depois a autenticação da Google Chat API.
