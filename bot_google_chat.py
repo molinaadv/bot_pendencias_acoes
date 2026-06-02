@@ -52,7 +52,6 @@ from fastapi.responses import JSONResponse
 
 @app.post("/google-chat-pendencias-acoes")
 async def google_chat_pendencias_acoes(request: Request):
-
     event = await request.json()
 
     print("===================================")
@@ -60,11 +59,17 @@ async def google_chat_pendencias_acoes(request: Request):
     print(event)
     print("===================================")
 
-    return JSONResponse(
-        content={
-            "text": "✅ Bot Pendências Ações conectado com sucesso!"
+    return {
+        "hostAppDataAction": {
+            "chatDataAction": {
+                "createMessageAction": {
+                    "message": {
+                        "text": "✅ Bot Pendências Ações conectado com sucesso.\n\nDigite *nova* para abrir uma pendência."
+                    }
+                }
+            }
         }
-    )
+    }
 
     if not texto:
         return resposta(
