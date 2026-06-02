@@ -7,73 +7,215 @@ app = FastAPI()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+TABELA_PENDENCIAS = "pendencias_acoes"
+TABELA_SESSOES = "chat_sessions_acoes"
+TABELA_HISTORICO = "historico_pendencias"
 
-def protocolo():
-    return "MAR-" + datetime.now().strftime("%Y%m%d%H%M%S")
 
-
-def get_user(event):
-    user = event.get("user", {})
-    return user.get("name") or user.get("email") or user.get("displayName") or "usuario_google_chat"
+def gerar_protocolo():
+    return "PA-" + datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def resposta(texto):
     return {"text": texto}
 
-@app.post("/google-chat-marcos")
-async def google_chat_marcos(request: Request):
+
+def dados_usuario(event):
+    user = event.get("user", {}) or {}
+
+    nome = (
+        user.get("displayName")
+        or user.get("name")
+        or "Usuário Google Chat"
+    )
+
+    email = user.get("email") or ""
+
+    google_user_id = (
+        user.get("name")
+        or user.get("email")
+        or nome
+    )
+
+    return nome, email, google_user_id
+
+
+@app.get("/")
+async def home():
+    return {"status": "online", "app": "Pendências Ações"}
+
+
+@app.post("/google-chat-pendencias-acoes")
+async def google_chat_pendencias_acoes(request: Request):
     event = await request.json()
+
     texto = (event.get("message", {}).get("text") or "").strip()
-    user_id = get_user(event)
+    texto_lower = texto.lower()
+
+    nome_usuario, email_usuario, google_user_id = dados_usuario(event)
 
     if not texto:
-        return resposta("Digite: abrir pendência")
+        return resposta(
+            "Digite *nova* para abrir uma pendência."
+        )
 
-    session_resp = supabase.table("chat_sessions_marcos").select("*").eq("user_id", user_id).execute()
-    sess = session_resp.data[0] if session_resp.data else None
+    session_resp = (
+        supabase
+        .table(TABELA_SESSOES)
+        .select("*")
+        .eq("user_id", google_user_id)
+        .execute()
+    )
 
-    if texto.lower() in ["abrir", "abrir pendência", "abrir pendencia", "nova", "nova pendência", "nova pendencia"]:
-        if sess:
-            supabase.table("chat_sessions_marcos").delete().eq("user_id", user_id).execute()
-        supabase.table("chat_sessions_marcos").insert({"user_id": user_id, "etapa": "nome", "dados": {}}).execute()
-        return resposta("Vamos abrir uma pendência para o Marcos.\n\nInforme seu nome:")
+    sessao = session_resp.data[0] if session_resp.data else None
 
-    if not sess:
-        return resposta("Para abrir uma pendência, digite: abrir pendência")
+    if texto_lower in [
+        "nova",
+        "abrir",
+        "abrir pendência",
+        "abrir pendencia",
+        "nova pendência",
+        "nova pendencia",
+        "pendência",
+        "pendencia"
+    ]:
+        if sessao:
+            supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
 
-    etapa = sess.get("etapa")
-    dados = sess.get("dados") or {}
+        supabase.table(TABELA_SESSOES).insert({
+            "user_id": google_user_id,
+            "etapa": "cidade",
+            "dados": {
+                "solicitante": nome_usuario,
+                "email_solicitante": email_usuario,
+                "google_user_id": google_user_id
+            }
+        }).execute()
 
-    if etapa == "nome":
-        dados["nome_solicitante"] = texto
-        supabase.table("chat_sessions_marcos").update({"etapa": "cidade", "dados": dados}).eq("user_id", user_id).execute()
-        return resposta("Informe a cidade:")
+        return resposta(
+            f"📋 *Nova Pendência - Ações*\n\n"
+            f"Solicitante identificado:\n"
+            f"*{nome_usuario}*\n\n"
+            f"Informe a *cidade*:"
+        )
+
+    if texto_lower in ["cancelar", "sair", "parar"]:
+        if sessao:
+            supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+
+        return resposta("Operação cancelada. Para abrir outra pendência, digite *nova*.")
+
+    if texto_lower in ["ajuda", "menu", "início", "inicio"]:
+        return resposta(
+            "📌 *Pendências Ações*\n\n"
+            "Comandos disponíveis:\n\n"
+            "*nova* - abrir uma nova pendência\n"
+            "*listar* - listar pendências abertas\n"
+            "*cancelar* - cancelar abertura em andamento"
+        )
+
+    if texto_lower in ["listar", "pendências", "pendencias", "abertas"]:
+        pend_resp = (
+            supabase
+            .table(TABELA_PENDENCIAS)
+            .select("protocolo,cidade,comunidade,status,descricao,criado_em")
+            .in_("status", ["Aberta", "Em andamento", "Aguardando informação"])
+            .order("criado_em", desc=True)
+            .limit(10)
+            .execute()
+        )
+
+        dados = pend_resp.data or []
+
+        if not dados:
+            return resposta("Nenhuma pendência ativa encontrada.")
+
+        linhas = ["📋 *Últimas pendências ativas*\n"]
+
+        for item in dados:
+            linhas.append(
+                f"\n*{item.get('protocolo', '')}*\n"
+                f"Cidade: {item.get('cidade', '')}\n"
+                f"Comunidade: {item.get('comunidade', '')}\n"
+                f"Status: {item.get('status', '')}\n"
+                f"Descrição: {item.get('descricao', '')[:80]}"
+            )
+
+        return resposta("\n".join(linhas))
+
+    if not sessao:
+        return resposta(
+            "Para abrir uma pendência, digite *nova*.\n\n"
+            "Para ver as pendências abertas, digite *listar*."
+        )
+
+    etapa = sessao.get("etapa")
+    dados = sessao.get("dados") or {}
 
     if etapa == "cidade":
         dados["cidade"] = texto
-        supabase.table("chat_sessions_marcos").update({"etapa": "comunidade", "dados": dados}).eq("user_id", user_id).execute()
-        return resposta("Informe a comunidade:")
+
+        supabase.table(TABELA_SESSOES).update({
+            "etapa": "comunidade",
+            "dados": dados
+        }).eq("user_id", google_user_id).execute()
+
+        return resposta("Informe a *comunidade*:")
 
     if etapa == "comunidade":
         dados["comunidade"] = texto
-        supabase.table("chat_sessions_marcos").update({"etapa": "descricao", "dados": dados}).eq("user_id", user_id).execute()
-        return resposta("Descreva a pendência:")
+
+        supabase.table(TABELA_SESSOES).update({
+            "etapa": "descricao",
+            "dados": dados
+        }).eq("user_id", google_user_id).execute()
+
+        return resposta("Descreva a *pendência*:")
 
     if etapa == "descricao":
-        prot = protocolo()
+        protocolo = gerar_protocolo()
+
         pendencia = {
-            "protocolo": prot,
-            "nome_solicitante": dados.get("nome_solicitante", ""),
+            "protocolo": protocolo,
+            "nome_solicitante": dados.get("solicitante", nome_usuario),
+            "solicitante": dados.get("solicitante", nome_usuario),
+            "email_solicitante": dados.get("email_solicitante", email_usuario),
+            "google_user_id": dados.get("google_user_id", google_user_id),
             "cidade": dados.get("cidade", ""),
             "comunidade": dados.get("comunidade", ""),
             "descricao": texto,
             "status": "Aberta",
-            "responsavel": "Marcos",
+            "responsavel": "Ações"
         }
-        supabase.table("pendencias_marcos").insert(pendencia).execute()
-        supabase.table("chat_sessions_marcos").delete().eq("user_id", user_id).execute()
-        return resposta(f"Pendência aberta com sucesso.\n\nProtocolo: {prot}\nResponsável: Marcos\nStatus: Aberta")
 
-    return resposta("Digite: abrir pendência")
+        insert_resp = supabase.table(TABELA_PENDENCIAS).insert(pendencia).execute()
+
+        pendencia_id = None
+        if insert_resp.data:
+            pendencia_id = insert_resp.data[0].get("id")
+
+        supabase.table(TABELA_HISTORICO).insert({
+            "pendencia_id": pendencia_id,
+            "protocolo": protocolo,
+            "usuario": nome_usuario,
+            "email_usuario": email_usuario,
+            "status_anterior": "",
+            "status_novo": "Aberta",
+            "observacao": "Pendência criada pelo Google Chat"
+        }).execute()
+
+        supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
+
+        return resposta(
+            f"✅ *Pendência criada com sucesso!*\n\n"
+            f"*Protocolo:* {protocolo}\n"
+            f"*Cidade:* {dados.get('cidade', '')}\n"
+            f"*Comunidade:* {dados.get('comunidade', '')}\n"
+            f"*Status:* Aberta\n\n"
+            f"A pendência já aparece no painel."
+        )
+
+    return resposta("Não entendi. Digite *nova* para abrir uma pendência.")
