@@ -62,28 +62,29 @@ async def home():
 async def google_chat_pendencias_acoes(request: Request):
     event = await request.json()
 
+    print("===================================")
     print("EVENTO RECEBIDO GOOGLE CHAT")
     print(event)
 
-msg_payload = event.get("messagePayload", {}).get("message", {})
-msg_normal = event.get("message", {})
+    msg_payload = event.get("messagePayload", {}).get("message", {})
+    msg_normal = event.get("message", {})
 
-texto = (
-    msg_payload.get("argumentText")
-    or msg_payload.get("formattedText")
-    or msg_payload.get("text")
-    or msg_normal.get("argumentText")
-    or msg_normal.get("formattedText")
-    or msg_normal.get("text")
-    or ""
-).strip()
+    texto = (
+        msg_payload.get("argumentText")
+        or msg_payload.get("formattedText")
+        or msg_payload.get("text")
+        or msg_normal.get("argumentText")
+        or msg_normal.get("formattedText")
+        or msg_normal.get("text")
+        or ""
+    ).strip()
 
-print("===================================")
-print("TEXTO EXTRAIDO:")
-print(f"'{texto}'")
+    print("===================================")
+    print("TEXTO EXTRAIDO:")
+    print(f"'{texto}'")
     print("===================================")
 
-texto_lower = texto.lower()
+    texto_lower = texto.lower()
 
     nome_usuario, email_usuario, google_user_id = dados_usuario(event)
 
