@@ -19,12 +19,22 @@ def gerar_protocolo():
     return "PA-" + datetime.now().strftime("%Y%m%d%H%M%S")
 
 
-def resposta(texto):
-    return {"text": texto}
+def resposta_chat(texto):
+    return {
+        "hostAppDataAction": {
+            "chatDataAction": {
+                "createMessageAction": {
+                    "message": {
+                        "text": texto
+                    }
+                }
+            }
+        }
+    }
 
 
 def dados_usuario(event):
-    user = event.get("user", {}) or {}
+    user = event.get("chat", {}).get("user", {}) or event.get("user", {}) or {}
 
     nome = (
         user.get("displayName")
@@ -48,33 +58,24 @@ async def home():
     return {"status": "online", "app": "Pendências Ações"}
 
 
-from fastapi.responses import JSONResponse
-
 @app.post("/google-chat-pendencias-acoes")
 async def google_chat_pendencias_acoes(request: Request):
     event = await request.json()
 
-    print("===================================")
     print("EVENTO RECEBIDO GOOGLE CHAT")
     print(event)
-    print("===================================")
 
-    return {
-        "hostAppDataAction": {
-            "chatDataAction": {
-                "createMessageAction": {
-                    "message": {
-                        "text": "✅ Bot Pendências Ações conectado com sucesso.\n\nDigite *nova* para abrir uma pendência."
-                    }
-                }
-            }
-        }
-    }
+    texto = (
+        event.get("messagePayload", {})
+        .get("message", {})
+        .get("text")
+        or event.get("message", {}).get("text")
+        or ""
+    ).strip()
 
-    if not texto:
-        return resposta(
-            "Digite *nova* para abrir uma pendência."
-        )
+    texto_lower = texto.lower()
+
+    nome_usuario, email_usuario, google_user_id = dados_usuario(event)
 
     session_resp = (
         supabase
@@ -85,6 +86,15 @@ async def google_chat_pendencias_acoes(request: Request):
     )
 
     sessao = session_resp.data[0] if session_resp.data else None
+
+    if texto_lower in ["oi", "olá", "ola", "menu", "ajuda", "início", "inicio"]:
+        return resposta_chat(
+            "📌 *Pendências Ações*\n\n"
+            "Comandos disponíveis:\n\n"
+            "*nova* - abrir uma nova pendência\n"
+            "*listar* - listar pendências abertas\n"
+            "*cancelar* - cancelar abertura em andamento"
+        )
 
     if texto_lower in [
         "nova",
@@ -109,7 +119,7 @@ async def google_chat_pendencias_acoes(request: Request):
             }
         }).execute()
 
-        return resposta(
+        return resposta_chat(
             f"📋 *Nova Pendência - Ações*\n\n"
             f"Solicitante identificado:\n"
             f"*{nome_usuario}*\n\n"
@@ -120,15 +130,9 @@ async def google_chat_pendencias_acoes(request: Request):
         if sessao:
             supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
 
-        return resposta("Operação cancelada. Para abrir outra pendência, digite *nova*.")
-
-    if texto_lower in ["ajuda", "menu", "início", "inicio"]:
-        return resposta(
-            "📌 *Pendências Ações*\n\n"
-            "Comandos disponíveis:\n\n"
-            "*nova* - abrir uma nova pendência\n"
-            "*listar* - listar pendências abertas\n"
-            "*cancelar* - cancelar abertura em andamento"
+        return resposta_chat(
+            "Operação cancelada.\n\n"
+            "Para abrir outra pendência, digite *nova*."
         )
 
     if texto_lower in ["listar", "pendências", "pendencias", "abertas"]:
@@ -145,7 +149,7 @@ async def google_chat_pendencias_acoes(request: Request):
         dados = pend_resp.data or []
 
         if not dados:
-            return resposta("Nenhuma pendência ativa encontrada.")
+            return resposta_chat("Nenhuma pendência ativa encontrada.")
 
         linhas = ["📋 *Últimas pendências ativas*\n"]
 
@@ -158,12 +162,12 @@ async def google_chat_pendencias_acoes(request: Request):
                 f"Descrição: {item.get('descricao', '')[:80]}"
             )
 
-        return resposta("\n".join(linhas))
+        return resposta_chat("\n".join(linhas))
 
     if not sessao:
-        return resposta(
-            "Para abrir uma pendência, digite *nova*.\n\n"
-            "Para ver as pendências abertas, digite *listar*."
+        return resposta_chat(
+            "Não encontrei uma pendência em andamento.\n\n"
+            "Digite *nova* para abrir uma pendência."
         )
 
     etapa = sessao.get("etapa")
@@ -177,7 +181,7 @@ async def google_chat_pendencias_acoes(request: Request):
             "dados": dados
         }).eq("user_id", google_user_id).execute()
 
-        return resposta("Informe a *comunidade*:")
+        return resposta_chat("Informe a *comunidade*:")
 
     if etapa == "comunidade":
         dados["comunidade"] = texto
@@ -187,7 +191,7 @@ async def google_chat_pendencias_acoes(request: Request):
             "dados": dados
         }).eq("user_id", google_user_id).execute()
 
-        return resposta("Descreva a *pendência*:")
+        return resposta_chat("Descreva a *pendência*:")
 
     if etapa == "descricao":
         protocolo = gerar_protocolo()
@@ -223,7 +227,7 @@ async def google_chat_pendencias_acoes(request: Request):
 
         supabase.table(TABELA_SESSOES).delete().eq("user_id", google_user_id).execute()
 
-        return resposta(
+        return resposta_chat(
             f"✅ *Pendência criada com sucesso!*\n\n"
             f"*Protocolo:* {protocolo}\n"
             f"*Cidade:* {dados.get('cidade', '')}\n"
@@ -232,4 +236,4 @@ async def google_chat_pendencias_acoes(request: Request):
             f"A pendência já aparece no painel."
         )
 
-    return resposta("Não entendi. Digite *nova* para abrir uma pendência.")
+    return resposta_chat("Não entendi. Digite *nova* para abrir uma pendência.")
