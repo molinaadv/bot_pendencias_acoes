@@ -34,25 +34,21 @@ def resposta_chat(texto):
 
 
 def extrair_texto(event):
-    print("EVENTO COMPLETO:")
-    print(event)
+    texto = (
+        event.get("argumentText")
+        or event.get("message", {}).get("argumentText")
+        or event.get("message", {}).get("text")
+        or event.get("messagePayload", {}).get("argumentText")
+        or event.get("messagePayload", {}).get("message", {}).get("argumentText")
+        or event.get("messagePayload", {}).get("message", {}).get("text")
+        or event.get("chat", {}).get("messagePayload", {}).get("argumentText")
+        or event.get("chat", {}).get("messagePayload", {}).get("message", {}).get("argumentText")
+        or event.get("chat", {}).get("messagePayload", {}).get("message", {}).get("text")
+        or event.get("chat", {}).get("messagePayload", {}).get("message", {}).get("formattedText")
+        or ""
+    )
 
-    try:
-        return str(event["message"]["text"]).strip()
-    except:
-        pass
-
-    try:
-        return str(event["messagePayload"]["message"]["text"]).strip()
-    except:
-        pass
-
-    try:
-        return str(event["argumentText"]).strip()
-    except:
-        pass
-
-    return ""
+    return str(texto).strip()
 
 
 def dados_usuario(event):
